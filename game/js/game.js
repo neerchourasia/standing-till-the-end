@@ -1314,7 +1314,7 @@ async function createAccount() {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return loginMsg('Please enter a valid email address.');
   if (pw.length < 4) return loginMsg('Password must be at least 4 characters.');
   const hash = await hashPw(pw);
-  const res = await postApi('/api/signup', { name, username: user, hash });
+  const res = await postApi('/api/signup', { name, username: user, hash, share: $('loginShare').checked });
   if (!res) return;
   loginAs(name, hash, res.data);
 }

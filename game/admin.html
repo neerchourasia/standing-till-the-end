@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Standing Till the End - Owner view</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; max-width: 900px; }
+  input { font-size: 15px; padding: 6px; margin: 4px; width: 260px; }
+  button { font-size: 15px; padding: 6px 12px; }
+  table { border-collapse: collapse; margin-top: 16px; width: 100%; }
+  td, th { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; font-size: 14px; }
+  #msg { color: #a00; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<h2>Owner view</h2>
+<p>Shows only players who ticked "Let the app owner see my email, username and progress" when they signed up. Passwords are never shown.</p>
+<div>
+  <input id="user" placeholder="Owner username">
+  <input id="email" type="email" placeholder="Owner email">
+  <input id="pass" type="password" placeholder="Password">
+  <button id="load">Load</button>
+</div>
+<p id="msg"></p>
+<div id="out"></div>
+
+<script>
+// same hashing as the game, so the owner logs in with the same password
+function hashPw(pw) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw)).then(d =>
+    [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join(''));
+}
+document.getElementById('load').onclick = async () => {
+  const msg = document.getElementById('msg'), out = document.getElementById('out');
+  msg.textContent = ''; out.textContent = '';
+  const hash = await hashPw(document.getElementById('pass').value);
+  const r = await fetch('/api/admin', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: document.getElementById('email').value.trim().toLowerCase(),
+                           username: document.getElementById('user').value.trim(), hash }),
+  });
+  const j = await r.json();
+  if (!r.ok) { msg.textContent = j.error || 'Could not load.'; return; }
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Username</th><th>Email</th><th>Coins</th><th>Animals bought</th><th>Best days</th></tr>';
+  for (const u of j.users) {
+    const tr = document.createElement('tr');
+    const best = Object.entries(u.bestDays || {}).map(([k, v]) => k + ': ' + v).join(', ');
+    for (const text of [u.username, u.email, u.coins, (u.owned || []).join(', '), best]) {
+      const td = document.createElement('td'); td.textContent = String(text ?? ''); tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+  out.appendChild(table);
+  msg.textContent = j.users.length + ' player(s) shared their details.';
+};
+</script>
+</body>
+</html>

@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     if (action === 'signup') {
       const exists = await db.exists(key(name));
       if (exists) return res.status(409).json({ error: 'That name is taken.' });
-      const data = { coins: 0, owned: [], bestDays: {}, username };
+      const data = { coins: 0, owned: [], bestDays: {}, username, share: !!body.share };
       await db.set(key(name), JSON.stringify({ hash, data }));
       return res.status(200).json({ data });
     }
@@ -39,6 +39,19 @@ export default async function handler(req, res) {
     if (action === 'login' && String(acct.data.username || '').toLowerCase() !== username.toLowerCase())
       return res.status(401).json({ error: 'That username does not match this email.' });
 
+    if (action === 'admin') {
+      const admin = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+      if (!admin || name !== admin) return res.status(403).json({ error: 'Not allowed.' });
+      const users = [];
+      for (const k of await db.keys('account:*')) {
+        const r = await db.get(k);
+        const a = r ? JSON.parse(r) : null;
+        if (a && a.data && a.data.share) {
+          users.push({ email: k.slice('account:'.length), username: a.data.username, coins: a.data.coins, owned: a.data.owned, bestDays: a.data.bestDays });
+        }
+      }
+      return res.status(200).json({ users });
+    }
     if (action === 'login') return res.status(200).json({ data: acct.data });
     if (action === 'save') {
       acct.data = body.data || acct.data;
