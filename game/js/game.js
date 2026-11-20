@@ -911,13 +911,15 @@ function update(dt) {
   }
   const airborne = ANI.flies && P.alt > 0.3;
   const nightMul = (ANI.nightSpeed && night) ? ANI.nightSpeed : 1;
-  const sp = 3.2 * ANI.speed * nightMul * (P.energy < 15 ? 0.6 : 1) * (dashT > 0 ? 2.2 : 1);
+  // everyone can swim; land animals wade slowly through water
+  const inWater = tileAt(P.x, P.y) === T_WATER;
+  const sp = 3.2 * ANI.speed * nightMul * (P.energy < 15 ? 0.6 : 1) * (dashT > 0 ? 2.2 : 1) * (inWater && !ANI.swims ? 0.6 : 1);
   // forward = (sin h, cos h); screen-right = (-cos h, sin h)
   let mdx = Math.sin(P.h) * fwd + -Math.cos(P.h) * side;
   let mdy = Math.cos(P.h) * fwd + Math.sin(P.h) * side;
   const mlen = Math.hypot(mdx, mdy);
   if (mlen > 1) { mdx /= mlen; mdy /= mlen; }
-  move(P, mdx * sp * dt, mdy * sp * dt, 0.3, false, airborne, !!ANI.swims);
+  move(P, mdx * sp * dt, mdy * sp * dt, 0.3, false, airborne, true);
 
   const den = inDen();
   P.hunger = Math.max(0, P.hunger - 0.6 * ANI.hunger * dt);
