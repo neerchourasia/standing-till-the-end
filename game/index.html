@@ -26,9 +26,15 @@
   <input id="loginName" placeholder="Username" maxlength="16" autocomplete="username" style="font-size:18px;padding:8px;margin:6px;width:240px">
   <input id="loginUser" type="email" placeholder="Email" maxlength="120" autocomplete="email" style="font-size:18px;padding:8px;margin:6px;width:240px">
   <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password" style="font-size:18px;padding:8px;margin:6px;width:240px">
+  <label style="display:block;font-size:13px;margin:8px;max-width:300px"><input type="checkbox" id="loginTerms"> I agree to the <a href="terms.html" target="_blank">Terms of Service</a> (required)</label>
   <label style="display:block;font-size:13px;margin:8px;max-width:300px"><input type="checkbox" id="loginShare"> Let the app owner see my email, username and progress (never my password)</label>
   <div style="margin-top:8px"><button id="btnLogin" style="font-size:16px;padding:8px 16px">Log in</button> <button id="btnCreate" style="font-size:16px;padding:8px 16px">Create account</button></div>
   <p id="loginMsg" style="min-height:1.2em;margin-top:14px"></p>
+</div>
+<div id="termsGate" style="position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:30;text-align:center;padding:20px">
+  <h2>Terms of Service updated</h2>
+  <p style="max-width:520px">Please read and accept the <a href="terms.html" target="_blank">Terms of Service</a> to keep playing.</p>
+  <div><button id="btnAcceptTerms" style="font-size:16px;padding:8px 16px">I accept</button> <button id="btnDeclineTerms" style="font-size:16px;padding:8px 16px">Log out</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="js/game.js"></script>

@@ -1261,12 +1261,14 @@ scene.add(rainMesh);
 // accounts and saves live on the save server (server.py), so every browser sees them
 let currentHash = null;
 let currentUsername = '';
+let currentTerms = '';
+const TERMS_VERSION = '2026-11-20';
 function writeAccount() {
   if (!currentUser) return;
   fetch('/api/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: currentUser, hash: currentHash, data: { coins, owned, bestDays, username: currentUsername } }),
+    body: JSON.stringify({ name: currentUser, hash: currentHash, data: { coins, owned, bestDays, username: currentUsername, terms: currentTerms } }),
   }).catch(() => {});
 }
 async function postApi(path, body) {
@@ -1300,6 +1302,7 @@ function loginAs(name, hash, data) {
   currentHash = hash;
   data = data || {};
   currentUsername = data.username || '';
+  currentTerms = data.terms || '';
   coins = data.coins || 0;
   owned = data.owned || [];
   bestDays = data.bestDays || {};
@@ -1308,6 +1311,7 @@ function loginAs(name, hash, data) {
   $('loginUser').value = ''; $('loginPass').value = ''; loginMsg('');
   $('cards').innerHTML = '';
   buildMenu();
+  if (currentTerms !== TERMS_VERSION) { $('termsGate').style.display = 'flex'; paused = true; return; }
   showMenu();
 }
 async function createAccount() {
@@ -1316,7 +1320,8 @@ async function createAccount() {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return loginMsg('Please enter a valid email address.');
   if (pw.length < 4) return loginMsg('Password must be at least 4 characters.');
   const hash = await hashPw(pw);
-  const res = await postApi('/api/signup', { name, username: user, hash, share: $('loginShare').checked });
+  if (!$('loginTerms').checked) return loginMsg('You must accept the Terms of Service to create an account.');
+  const res = await postApi('/api/signup', { name, username: user, hash, share: $('loginShare').checked, terms: true, termsVersion: TERMS_VERSION });
   if (!res) return;
   loginAs(name, hash, res.data);
 }
@@ -1330,7 +1335,7 @@ async function logIn() {
 }
 function logOut() {
   writeAccount();
-  currentUser = null; currentHash = null; currentUsername = ''; coins = 0; owned = []; bestDays = {};
+  currentUser = null; currentHash = null; currentUsername = ''; currentTerms = ''; coins = 0; owned = []; bestDays = {};
   paused = true; over = false;
   $('menu').style.display = 'none';
   $('login').style.display = 'flex';
@@ -1340,6 +1345,16 @@ $('btnCreate').onclick = createAccount;
 $('btnLogin').onclick = logIn;
 $('btnLogout').onclick = logOut;
 $('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') logIn(); });
+
+// terms gate: players must accept the current terms before they can play
+function acceptTerms() {
+  currentTerms = TERMS_VERSION;
+  writeAccount();
+  $('termsGate').style.display = 'none';
+  showMenu();
+}
+$('btnAcceptTerms').onclick = acceptTerms;
+$('btnDeclineTerms').onclick = logOut;
 
 // ---------- start ----------
 flashEl = $('flash');

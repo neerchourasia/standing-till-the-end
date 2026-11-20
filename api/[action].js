@@ -26,9 +26,10 @@ export default async function handler(req, res) {
   try {
     const db = await getClient();
     if (action === 'signup') {
+      if (body.terms !== true) return res.status(400).json({ error: 'You must accept the Terms of Service.' });
       const exists = await db.exists(key(name));
       if (exists) return res.status(409).json({ error: 'That name is taken.' });
-      const data = { coins: 0, owned: [], bestDays: {}, username, share: !!body.share };
+      const data = { coins: 0, owned: [], bestDays: {}, username, share: !!body.share, terms: String(body.termsVersion || '') };
       await db.set(key(name), JSON.stringify({ hash, data }));
       return res.status(200).json({ data });
     }
