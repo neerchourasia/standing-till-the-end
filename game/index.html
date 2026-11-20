@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Forest Survival 3D</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+  <div class="row"><span>Health</span><div class="bg"><div class="fill" id="bHp" style="background:#e0304a"></div></div></div>
+  <div class="row"><span>Hunger</span><div class="bg"><div class="fill" id="bHunger" style="background:#e8873c"></div></div></div>
+  <div class="row"><span>Thirst</span><div class="bg"><div class="fill" id="bThirst" style="background:#3a9ce8"></div></div></div>
+  <div class="row"><span>Energy</span><div class="bg"><div class="fill" id="bEnergy" style="background:#f0d040"></div></div></div>
+  <div id="info"></div>
+</div>
+<div id="msg"></div>
+<div id="help">W/S or ↑/↓ forward &amp; back &nbsp;|&nbsp; A/D or ←/→ turn &nbsp;|&nbsp; E: eat, catch, hold to drink &nbsp;|&nbsp; Space: fly (birds) &nbsp;|&nbsp; T: tame a nearby animal &nbsp;|&nbsp; Shift: ability &nbsp;|&nbsp; Rest in the den at night</div>
+<div id="over"><h1>The forest claimed you</h1><p id="overTxt"></p><p>Press R to choose an animal again</p></div>
+<div id="flash" style="position:fixed;inset:0;pointer-events:none;background:rgba(255,0,0,0)"></div>
+<div id="menu"><h1>Choose your animal</h1><p id="coins" style="font-size:18px;margin:0 0 14px"></p><div id="cards"></div><p id="menuMsg" style="min-height:1.2em;margin-top:14px"></p><p style="margin-top:10px"><span id="userLabel" style="margin-right:12px;opacity:.8"></span><button id="btnLogout" style="font-size:14px;padding:4px 10px">Log out</button></p><p>Click a card or press its key</p></div>
+
+<div id="login" style="position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;text-align:center">
+  <h1 style="font-size:34px;margin:0 0 18px">Forest Survival</h1>
+  <input id="loginUser" placeholder="Username" maxlength="16" autocomplete="username" style="font-size:18px;padding:8px;margin:6px;width:240px">
+  <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password" style="font-size:18px;padding:8px;margin:6px;width:240px">
+  <div style="margin-top:8px"><button id="btnLogin" style="font-size:16px;padding:8px 16px">Log in</button> <button id="btnCreate" style="font-size:16px;padding:8px 16px">Create account</button></div>
+  <p id="loginMsg" style="min-height:1.2em;margin-top:14px"></p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
