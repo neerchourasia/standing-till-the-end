@@ -1,8 +1,16 @@
-// Account and save API for Vercel. Accounts live in Redis (Upstash).
+// Account and save API for Vercel. Accounts live in Redis (REDIS_URL).
 // Routes: POST /api/signup, /api/login, /api/save
-import { Redis } from '@upstash/redis';
+import { createClient } from 'redis';
 
-const redis = Redis.fromEnv();
+let clientPromise = null;
+function getClient() {
+  if (!clientPromise) {
+    const client = createClient({ url: process.env.REDIS_URL });
+    client.on('error', () => {});
+    clientPromise = client.connect().then(() => client);
+  }
+  return clientPromise;
+}
 const key = name => 'account:' + name;
 
 export default async function handler(req, res) {
@@ -13,22 +21,28 @@ export default async function handler(req, res) {
   const hash = String(body.hash || '');
   if (!/^[A-Za-z0-9_]{2,16}$/.test(name)) return res.status(400).json({ error: 'Bad username.' });
 
-  if (action === 'signup') {
-    const exists = await redis.exists(key(name));
-    if (exists) return res.status(409).json({ error: 'That name is taken.' });
-    const data = { coins: 0, owned: [], bestDays: {} };
-    await redis.set(key(name), { hash, data });
-    return res.status(200).json({ data });
-  }
+  try {
+    const db = await getClient();
+    if (action === 'signup') {
+      const exists = await db.exists(key(name));
+      if (exists) return res.status(409).json({ error: 'That name is taken.' });
+      const data = { coins: 0, owned: [], bestDays: {} };
+      await db.set(key(name), JSON.stringify({ hash, data }));
+      return res.status(200).json({ data });
+    }
 
-  const acct = await redis.get(key(name));
-  if (!acct || acct.hash !== hash) return res.status(401).json({ error: 'Wrong name or password.' });
+    const raw = await db.get(key(name));
+    const acct = raw ? JSON.parse(raw) : null;
+    if (!acct || acct.hash !== hash) return res.status(401).json({ error: 'Wrong name or password.' });
 
-  if (action === 'login') return res.status(200).json({ data: acct.data });
-  if (action === 'save') {
-    acct.data = body.data || acct.data;
-    await redis.set(key(name), acct);
-    return res.status(200).json({ ok: true });
+    if (action === 'login') return res.status(200).json({ data: acct.data });
+    if (action === 'save') {
+      acct.data = body.data || acct.data;
+      await db.set(key(name), JSON.stringify(acct));
+      return res.status(200).json({ ok: true });
+    }
+    return res.status(404).json({ error: 'Unknown action.' });
+  } catch (e) {
+    return res.status(500).json({ error: 'The save server had a problem. Try again.' });
   }
-  return res.status(404).json({ error: 'Unknown action.' });
 }
