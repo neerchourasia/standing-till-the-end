@@ -17,9 +17,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Use POST.' });
   const action = req.query.action;
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  const name = String(body.name || '');
+  const name = String(body.name || '').trim().toLowerCase();
   const hash = String(body.hash || '');
-  if (!/^[A-Za-z0-9_]{2,16}$/.test(name)) return res.status(400).json({ error: 'Bad username.' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return res.status(400).json({ error: 'Please enter a valid email address.' });
 
   try {
     const db = await getClient();

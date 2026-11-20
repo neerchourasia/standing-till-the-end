@@ -1240,8 +1240,8 @@ function loginAs(name, hash, data) {
   showMenu();
 }
 async function createAccount() {
-  const name = $('loginUser').value.trim(), pw = $('loginPass').value;
-  if (!/^[A-Za-z0-9_]{2,16}$/.test(name)) return loginMsg('Username: 2 to 16 letters, numbers or _.');
+  const name = $('loginUser').value.trim().toLowerCase(), pw = $('loginPass').value;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return loginMsg('Please enter a valid email address.');
   if (pw.length < 4) return loginMsg('Password must be at least 4 characters.');
   const hash = await hashPw(pw);
   const res = await postApi('/api/signup', { name, hash });
@@ -1249,7 +1249,7 @@ async function createAccount() {
   loginAs(name, hash, res.data);
 }
 async function logIn() {
-  const name = $('loginUser').value.trim(), pw = $('loginPass').value;
+  const name = $('loginUser').value.trim().toLowerCase(), pw = $('loginPass').value;
   const hash = await hashPw(pw);
   const res = await postApi('/api/login', { name, hash });
   if (!res) return;
