@@ -460,13 +460,18 @@ Object.assign(ANIMALS, {
 
 // ---------- unlocks, best-days records, abilities ----------
 // coin price to buy each animal; animals not listed are free from the start
+const ABILITY_BY_ANIMAL = {
+  fox: 'dash', deer: 'leap', bear: 'roar', rabbit: 'secondwind', wolf: 'howl',
+  badger: 'heal', squirrel: 'stash', boar: 'charge', hawk: 'soar', owl: 'hoot',
+  duck: 'dive', crow: 'pilfer', eagle: 'stoop', sparrow: 'song', heron: 'fish',
+  pigeon: 'homing', falcon: 'rush', secretary: 'snack', hedgehog: 'curl',
+  raccoon: 'rummage', moose: 'bellow', lynx: 'stomp',
+};
 const PRICE = { bear: 10, badger: 10, wolf: 15, boar: 12, hawk: 15, crow: 12, owl: 18, heron: 20, eagle: 25, falcon: 25, secretary: 30, hedgehog: 8, raccoon: 12, moose: 20, lynx: 22 };
 for (const k in ANIMALS) {
   ANIMALS[k].price = PRICE[k] || 0;
-  ANIMALS[k].ability = 'dash';        // Shift: quick burst of speed
+  ANIMALS[k].ability = ABILITY_BY_ANIMAL[k] || 'dash';   // Shift: each animal has its own
 }
-ANIMALS.bear.ability = 'roar';        // Shift: scare nearby wolves
-ANIMALS.badger.ability = 'heal';      // Shift: heal 20 health
 let bestDays = {};
 function saveBest() { writeAccount(); }
 
@@ -683,23 +688,82 @@ function beep(freq, dur) {
   } catch (e) { /* audio unavailable: stay silent */ }
 }
 
-// Shift: the animal's special ability (cooldown applies)
+// Shift: each animal has its own ability (cooldown applies)
+const ABILITY_INFO = {
+  dash: { cd: 6, text: 'Dash! Burst of speed.' },
+  leap: { cd: 8, text: 'Leap forward!' },
+  roar: { cd: 10, text: 'The bear roars! Wolves back off.' },
+  secondwind: { cd: 14, text: 'Second wind! +40 energy.' },
+  howl: { cd: 12, text: 'Pack howl! Nearby critters flee.' },
+  heal: { cd: 15, text: 'Tended wounds. +20 health.' },
+  stash: { cd: 10, text: 'Stashed food. +15 hunger.' },
+  charge: { cd: 10, text: 'Charge! Close wolves are knocked back.' },
+  soar: { cd: 8, text: 'Soaring high!' },
+  hoot: { cd: 16, text: 'Hoot! Your pets are healed.' },
+  dive: { cd: 10, text: 'Dive! +40 thirst.' },
+  pilfer: { cd: 12, text: 'Pilfered 2 coins.' },
+  stoop: { cd: 12, text: 'Stoop! Nearest rabbit caught.' },
+  song: { cd: 14, text: 'Song slows the wolves nearby.' },
+  fish: { cd: 12, text: 'Caught a fish. +30 hunger.' },
+  homing: { cd: 15, text: 'Your pets come home to you.' },
+  rush: { cd: 8, text: 'Rush!' },
+  stomp: { cd: 12, text: 'Stomp! Nearby critters scatter.' },
+  snack: { cd: 10, text: 'Snake snack. +20 hunger.' },
+  curl: { cd: 14, text: 'Curled up. Bites do nothing for 3s.' },
+  rummage: { cd: 12, text: 'Rummaged. +1 coin, +10 hunger.' },
+  bellow: { cd: 16, text: 'Bellow! Wolves back off, +10 health.' },
+};
 function useAbility() {
   if (over || paused) return;
+  const kind = ANI.ability;
+  const info = ABILITY_INFO[kind];
+  if (!info) return;
   if (abilityCool > 0) { say('Ability ready in ' + Math.ceil(abilityCool) + 's'); return; }
-  if (ANI.ability === 'roar') {
-    let n = 0;
-    for (const w of wolves) if (Math.hypot(w.x - P.x, w.y - P.y) < 7) { w.rest = 5; w.chase = 0; n++; }
-    abilityCool = 10;
-    say(n ? 'The bear roars! ' + n + ' wolf(es) back off.' : 'The bear roars at nothing.');
-  } else if (ANI.ability === 'heal') {
-    P.hp = Math.min(100, P.hp + 20);
-    abilityCool = 15;
-    say('The badger tends its wounds. (+20 health)');
-  } else {
-    dashT = 0.8; abilityCool = 6;
-    say('Dash!');
+  const near = (x, y, r) => Math.hypot(x - P.x, y - P.y) < r;
+  const fail = t => { say(t); };
+  switch (kind) {
+    case 'dash': dashT = 0.8; break;
+    case 'rush': dashT = 0.5; break;
+    case 'leap': {
+      const nx = P.x + Math.sin(P.h) * 3, ny = P.y + Math.cos(P.h) * 3;
+      if (blockedFor(nx, ny, 0.3, false, false, false)) return fail('Something is in the way.');
+      P.x = nx; P.y = ny; break;
+    }
+    case 'roar': for (const w of wolves) if (near(w.x, w.y, 7)) { w.rest = 5; w.chase = 0; } break;
+    case 'bellow':
+      for (const w of wolves) if (near(w.x, w.y, 6)) { w.rest = 3; w.chase = 0; }
+      P.hp = Math.min(100, P.hp + 10); break;
+    case 'secondwind': P.energy = Math.min(100, P.energy + 40); break;
+    case 'howl': for (const c of critters) if (near(c.x, c.y, 8)) c.fear = 4; break;
+    case 'stomp': for (const c of critters) if (near(c.x, c.y, 4)) c.fear = 4; break;
+    case 'heal': P.hp = Math.min(100, P.hp + 20); break;
+    case 'stash': P.hunger = clamp(P.hunger + 15, 0, 100); break;
+    case 'snack': P.hunger = clamp(P.hunger + 20, 0, 100); break;
+    case 'fish': P.hunger = clamp(P.hunger + 30, 0, 100); break;
+    case 'charge': for (const w of wolves) if (near(w.x, w.y, 3)) w.rest = Math.max(w.rest || 0, 3); break;
+    case 'soar':
+      if (!ANI.flies) return fail(ANI.name + ' cannot fly.');
+      P.alt = 3.5; break;
+    case 'hoot': for (const p of pets) p.hp = Math.min(PET_HP[p.kind], p.hp + 15); break;
+    case 'dive': P.thirst = Math.min(100, P.thirst + 40); break;
+    case 'pilfer': addCoins(2); break;
+    case 'rummage': addCoins(1); P.hunger = clamp(P.hunger + 10, 0, 100); break;
+    case 'stoop': {
+      let best = null, bd = 6;
+      for (const r of rabbits) { const d = Math.hypot(r.x - P.x, r.y - P.y); if (d < bd) { bd = d; best = r; } }
+      if (!best) return fail('No rabbit close enough to stoop on.');
+      world.remove(best.mesh);
+      rabbits.splice(rabbits.indexOf(best), 1);
+      P.hunger = clamp(P.hunger + 30, 0, 100);
+      break;
+    }
+    case 'song': for (const w of wolves) if (near(w.x, w.y, 10)) w.slow = 4; break;
+    case 'homing': for (const p of pets) { p.x = P.x; p.y = P.y; } break;
+    case 'curl': P.shield = 3; break;
+    default: return;
   }
+  abilityCool = info.cd;
+  say(info.text);
 }
 
 // wild critters: squirrels, deer and ducks (ducks live on ponds)
@@ -812,6 +876,7 @@ function update(dt) {
   if (over || paused) return;
   time += dt;
   if (abilityCool > 0) abilityCool -= dt;
+  if (P.shield > 0) P.shield -= dt;
   if (dashT > 0) dashT -= dt;
   // weather: rain every minute or so, lasting 25 seconds
   if (rainT > 0) rainT -= dt;
@@ -887,9 +952,10 @@ function update(dt) {
       if (w.t <= 0) { w.t = rnd(1, 3); w.a = rnd(0, 6.28); }
       tx = Math.cos(w.a); ty = Math.sin(w.a); s = 0.8;
     }
+    if (w.slow > 0) { w.slow -= dt; s *= 0.4; }
     move(w, tx * s * dt, ty * s * dt, 0.3, true);
     w.h = Math.atan2(tx, ty);
-    if (dist < 0.9 && w.cool <= 0 && !den && P.alt < 0.8) {
+    if (dist < 0.9 && w.cool <= 0 && !den && P.alt < 0.8 && !(P.shield > 0)) {
       w.cool = 1.8;
       const guard = pets.find(p => Math.hypot(p.x - P.x, p.y - P.y) < 2);
       if (guard) {
@@ -933,7 +999,8 @@ function update(dt) {
   for (const c of critters) {
     const dc = Math.hypot(P.x - c.x, P.y - c.y);
     const sp = { squirrel: 2.6, deer: 2.0, duck: 1.5, hedgehog: 0.8, raccoon: 1.8, boar: 1.6, lynx: 2.8 }[c.kind] || 2;
-    if (dc < 3.5) {
+    if (c.fear > 0) c.fear -= dt;
+    if (dc < 3.5 || c.fear > 0) {
       const L = dc || 1;
       c.vx = -(P.x - c.x) / L * sp; c.vy = -(P.y - c.y) / L * sp;
       c.t = 0;
@@ -1191,12 +1258,13 @@ scene.add(rainMesh);
 // ---------- accounts: saved in this browser; passwords are stored as hashes ----------
 // accounts and saves live on the save server (server.py), so every browser sees them
 let currentHash = null;
+let currentUsername = '';
 function writeAccount() {
   if (!currentUser) return;
   fetch('/api/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: currentUser, hash: currentHash, data: { coins, owned, bestDays } }),
+    body: JSON.stringify({ name: currentUser, hash: currentHash, data: { coins, owned, bestDays, username: currentUsername } }),
   }).catch(() => {});
 }
 async function postApi(path, body) {
@@ -1229,35 +1297,38 @@ function loginAs(name, hash, data) {
   currentUser = name;
   currentHash = hash;
   data = data || {};
+  currentUsername = data.username || '';
   coins = data.coins || 0;
   owned = data.owned || [];
   bestDays = data.bestDays || {};
   $('login').style.display = 'none';
-  $('userLabel').textContent = 'Signed in as ' + name;
+  $('userLabel').textContent = 'Signed in as ' + (currentUsername || name);
   $('loginUser').value = ''; $('loginPass').value = ''; loginMsg('');
   $('cards').innerHTML = '';
   buildMenu();
   showMenu();
 }
 async function createAccount() {
-  const name = $('loginUser').value.trim().toLowerCase(), pw = $('loginPass').value;
+  const name = $('loginUser').value.trim().toLowerCase(), user = $('loginName').value.trim(), pw = $('loginPass').value;
+  if (!/^[A-Za-z0-9_]{2,16}$/.test(user)) return loginMsg('Username: 2 to 16 letters, numbers or _.');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return loginMsg('Please enter a valid email address.');
   if (pw.length < 4) return loginMsg('Password must be at least 4 characters.');
   const hash = await hashPw(pw);
-  const res = await postApi('/api/signup', { name, hash });
+  const res = await postApi('/api/signup', { name, username: user, hash });
   if (!res) return;
   loginAs(name, hash, res.data);
 }
 async function logIn() {
-  const name = $('loginUser').value.trim().toLowerCase(), pw = $('loginPass').value;
+  const name = $('loginUser').value.trim().toLowerCase(), user = $('loginName').value.trim(), pw = $('loginPass').value;
+  if (!/^[A-Za-z0-9_]{2,16}$/.test(user)) return loginMsg('Username: 2 to 16 letters, numbers or _.');
   const hash = await hashPw(pw);
-  const res = await postApi('/api/login', { name, hash });
+  const res = await postApi('/api/login', { name, username: user, hash });
   if (!res) return;
   loginAs(name, hash, res.data);
 }
 function logOut() {
   writeAccount();
-  currentUser = null; currentHash = null; coins = 0; owned = []; bestDays = {};
+  currentUser = null; currentHash = null; currentUsername = ''; coins = 0; owned = []; bestDays = {};
   paused = true; over = false;
   $('menu').style.display = 'none';
   $('login').style.display = 'flex';
