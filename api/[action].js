@@ -40,18 +40,35 @@ export default async function handler(req, res) {
     if (action === 'login' && String(acct.data.username || '').toLowerCase() !== username.toLowerCase())
       return res.status(401).json({ error: 'That username does not match this email.' });
 
-    if (action === 'admin') {
+    if (action === 'admin' || action === 'admindelete') {
       const admin = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
       if (!admin || name !== admin) return res.status(403).json({ error: 'Not allowed.' });
+
+      // deletion request: the owner can remove any account on request (Terms of Service, section 6)
+      if (action === 'admindelete') {
+        const target = String(body.target || '').trim().toLowerCase();
+        if (!target || target === admin) return res.status(400).json({ error: 'Pick another account.' });
+        const removed = await db.del(key(target));
+        return res.status(200).json({ removed });
+      }
+
+      // stats cover everyone but contain no personal details; the list covers only players who opted in
       const users = [];
+      let total = 0, sharing = 0, totalCoins = 0;
+      const animals = {};
       for (const k of await db.keys('account:*')) {
         const r = await db.get(k);
         const a = r ? JSON.parse(r) : null;
-        if (a && a.data && a.data.share) {
+        if (!a || !a.data) continue;
+        total++;
+        totalCoins += Number(a.data.coins) || 0;
+        for (const o of a.data.owned || []) animals[o] = (animals[o] || 0) + 1;
+        if (a.data.share) {
+          sharing++;
           users.push({ email: k.slice('account:'.length), username: a.data.username, coins: a.data.coins, owned: a.data.owned, bestDays: a.data.bestDays });
         }
       }
-      return res.status(200).json({ users });
+      return res.status(200).json({ users, stats: { total, sharing, totalCoins, animals } });
     }
     if (action === 'login') return res.status(200).json({ data: acct.data });
     if (action === 'save') {

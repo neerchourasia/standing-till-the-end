@@ -2,57 +2,168 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Standing Till the End - Owner view</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Owner view - Standing Till the End</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
-  body { font-family: system-ui, sans-serif; margin: 24px; max-width: 900px; }
-  input { font-size: 15px; padding: 6px; margin: 4px; width: 260px; }
-  button { font-size: 15px; padding: 6px 12px; }
-  table { border-collapse: collapse; margin-top: 16px; width: 100%; }
-  td, th { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; font-size: 14px; }
-  #msg { color: #a00; min-height: 1.2em; }
+  :root { --bg:#f6f7f4; --ink:#1f2a22; --muted:#6a756d; --line:#dfe3dc; --accent:#2f7a36; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
+  header { background: #1f3d2b; color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { margin: 0; font-size: 20px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  input, button { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); }
+  button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  button.danger { background: #b3261e; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .stat b { display: block; font-size: 26px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { cursor: pointer; user-select: none; white-space: nowrap; }
+  th:hover { color: var(--accent); }
+  .bar { height: 10px; background: var(--accent); border-radius: 3px; }
+  #msg { min-height: 1.3em; color: #a00; }
+  #msg.ok { color: var(--accent); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-<h2>Owner view</h2>
-<p>Shows only players who ticked "Let the app owner see my email, username and progress" when they signed up. Passwords are never shown.</p>
-<div>
-  <input id="user" placeholder="Owner username">
-  <input id="email" type="email" placeholder="Owner email">
-  <input id="pass" type="password" placeholder="Password">
-  <button id="load">Load</button>
-</div>
-<p id="msg"></p>
-<div id="out"></div>
+<header>
+  <h1>Standing Till the End - Owner view</h1>
+  <button id="logout" class="secondary" hidden>Sign out</button>
+</header>
+<main>
+  <section id="login" class="card">
+    <p class="muted">Sign in with the owner account. Players who did not tick the sharing box never appear in the list, and passwords are never shown.</p>
+    <div class="row">
+      <input id="user" placeholder="Owner username">
+      <input id="email" type="email" placeholder="Owner email">
+      <input id="pass" type="password" placeholder="Password">
+      <button id="load">Load</button>
+    </div>
+  </section>
+  <p id="msg"></p>
+
+  <section id="dash" hidden>
+    <div class="card"><div class="stats" id="stats"></div></div>
+    <div class="card"><h3 style="margin-top:0">Animals bought (all players)</h3><div id="animals"></div></div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">Players who shared their details</h3>
+        <div class="row"><input id="search" placeholder="Search email or username"><button id="refresh" class="secondary">Refresh</button></div>
+      </div>
+      <div style="overflow-x:auto"><table id="table"></table></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Delete an account on request</h3>
+      <p class="muted">For players who asked the owner to delete their data (Terms of Service, section 6). This cannot be undone.</p>
+      <div class="row"><input id="delEmail" type="email" placeholder="Player's email"><button id="delete" class="danger">Delete account</button></div>
+    </div>
+  </section>
+</main>
 
 <script>
-// same hashing as the game, so the owner logs in with the same password
+const $ = id => document.getElementById(id);
+let creds = null;        // kept in memory only, cleared on sign out
+let users = [], sortKey = 'username', sortDir = 1;
+
 function hashPw(pw) {
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw)).then(d =>
     [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join(''));
 }
-document.getElementById('load').onclick = async () => {
-  const msg = document.getElementById('msg'), out = document.getElementById('out');
-  msg.textContent = ''; out.textContent = '';
-  const hash = await hashPw(document.getElementById('pass').value);
-  const r = await fetch('/api/admin', {
+function say(t, ok) { $('msg').textContent = t; $('msg').className = ok ? 'ok' : ''; }
+async function api(action, extra) {
+  const r = await fetch('/api/' + action, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: document.getElementById('email').value.trim().toLowerCase(),
-                           username: document.getElementById('user').value.trim(), hash }),
+    body: JSON.stringify({ ...creds, ...extra }),
   });
-  const j = await r.json();
-  if (!r.ok) { msg.textContent = j.error || 'Could not load.'; return; }
-  const table = document.createElement('table');
-  table.innerHTML = '<tr><th>Username</th><th>Email</th><th>Coins</th><th>Animals bought</th><th>Best days</th></tr>';
-  for (const u of j.users) {
-    const tr = document.createElement('tr');
-    const best = Object.entries(u.bestDays || {}).map(([k, v]) => k + ': ' + v).join(', ');
-    for (const text of [u.username, u.email, u.coins, (u.owned || []).join(', '), best]) {
-      const td = document.createElement('td'); td.textContent = String(text ?? ''); tr.appendChild(td);
-    }
-    table.appendChild(tr);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Request failed.');
+  return j;
+}
+
+function render() {
+  const q = $('search').value.trim().toLowerCase();
+  const rows = users
+    .filter(u => !q || (u.email || '').includes(q) || (u.username || '').toLowerCase().includes(q))
+    .sort((a, b) => {
+      const av = sortKey === 'owned' ? (a.owned || []).length : sortKey === 'best' ? Math.max(0, ...Object.values(a.bestDays || {})) : a[sortKey];
+      const bv = sortKey === 'owned' ? (b.owned || []).length : sortKey === 'best' ? Math.max(0, ...Object.values(b.bestDays || {})) : b[sortKey];
+      return (av > bv ? 1 : av < bv ? -1 : 0) * sortDir;
+    });
+  const t = $('table');
+  t.textContent = '';
+  const head = t.insertRow();
+  for (const [label, key] of [['Username', 'username'], ['Email', 'email'], ['Coins', 'coins'], ['Animals bought', 'owned'], ['Best days', 'best']]) {
+    const th = document.createElement('th');
+    th.textContent = label + (sortKey === key ? (sortDir > 0 ? ' ▲' : ' ▼') : '');
+    th.onclick = () => { sortDir = sortKey === key ? -sortDir : 1; sortKey = key; render(); };
+    head.appendChild(th);
   }
-  out.appendChild(table);
-  msg.textContent = j.users.length + ' player(s) shared their details.';
+  for (const u of rows) {
+    const tr = t.insertRow();
+    const best = Object.entries(u.bestDays || {}).map(([k, v]) => k + ' ' + v).join(', ');
+    for (const text of [u.username, u.email, u.coins, (u.owned || []).join(', ') || '-', best || '-']) {
+      tr.insertCell().textContent = String(text ?? '');
+    }
+  }
+  if (!rows.length) { const c = t.insertRow().insertCell(); c.colSpan = 5; c.className = 'muted'; c.textContent = 'No players to show.'; }
+}
+
+function showStats(s) {
+  const box = $('stats'); box.textContent = '';
+  for (const [label, value] of [['Accounts', s.total], ['Shared details', s.sharing], ['Not shared', s.total - s.sharing], ['Coins held', s.totalCoins]]) {
+    const d = document.createElement('div'); d.className = 'stat';
+    const b = document.createElement('b'); b.textContent = value;
+    d.appendChild(b); d.appendChild(document.createTextNode(label)); box.appendChild(d);
+  }
+  const a = $('animals'); a.textContent = '';
+  const entries = Object.entries(s.animals).sort((x, y) => y[1] - x[1]);
+  const max = Math.max(1, ...entries.map(e => e[1]));
+  if (!entries.length) a.textContent = 'No animals bought yet.';
+  for (const [name, n] of entries) {
+    const row = document.createElement('div'); row.className = 'row'; row.style.margin = '4px 0';
+    const label = document.createElement('span'); label.style.width = '110px'; label.textContent = name;
+    const bar = document.createElement('div'); bar.className = 'bar'; bar.style.width = (n / max * 300) + 'px';
+    const num = document.createElement('span'); num.className = 'muted'; num.textContent = n;
+    row.append(label, bar, num); a.appendChild(row);
+  }
+}
+
+async function load() {
+  try {
+    const j = await api('admin');
+    users = j.users; showStats(j.stats); render();
+    $('login').hidden = true; $('dash').hidden = false; $('logout').hidden = false;
+    say(j.stats.sharing + ' of ' + j.stats.total + ' players shared their details.', true);
+  } catch (e) { say(e.message); }
+}
+$('load').onclick = async () => {
+  say('');
+  creds = { name: $('email').value.trim().toLowerCase(), username: $('user').value.trim(), hash: await hashPw($('pass').value) };
+  $('pass').value = '';
+  load();
+};
+$('pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('load').click(); });
+$('refresh').onclick = load;
+$('search').oninput = render;
+$('logout').onclick = () => { creds = null; users = []; $('dash').hidden = true; $('login').hidden = false; $('logout').hidden = true; say('Signed out.', true); };
+$('delete').onclick = async () => {
+  const target = $('delEmail').value.trim().toLowerCase();
+  if (!target) return say('Enter the player\'s email.');
+  if (!confirm('Delete the account ' + target + '? This cannot be undone.')) return;
+  try {
+    const j = await api('admindelete', { target });
+    $('delEmail').value = '';
+    say(j.removed ? 'Deleted ' + target + '.' : 'No account found for ' + target + '.', !!j.removed);
+    load();
+  } catch (e) { say(e.message); }
 };
 </script>
 </body>
