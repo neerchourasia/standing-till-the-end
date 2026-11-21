@@ -20,11 +20,18 @@ export default async function handler(req, res) {
   const name = String(body.name || '').trim().toLowerCase();
   const hash = String(body.hash || '');
   const username = String(body.username || '').trim();
-  if (action !== 'save' && !/^[A-Za-z0-9_]{2,16}$/.test(username)) return res.status(400).json({ error: 'Username: 2 to 16 letters, numbers or _.' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+  if (!['save', 'presence', 'score', 'leaderboard'].includes(action) && !/^[A-Za-z0-9_]{2,16}$/.test(username)) return res.status(400).json({ error: 'Username: 2 to 16 letters, numbers or _.' });
+  if (action !== 'leaderboard' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) return res.status(400).json({ error: 'Please enter a valid email address.' });
 
   try {
     const db = await getClient();
+
+    if (action === 'leaderboard') {
+      const animal = String(body.animal || '');
+      const board = key2 => db.zRangeWithScores(key2, 0, -1).then(rows =>
+        rows.slice(-10).reverse().map(r => ({ username: r.value, score: r.score })));
+      return res.status(200).json({ board: await board(animal ? 'lb:animal:' + animal : 'lb:all') });
+    }
     if (action === 'signup') {
       if (body.terms !== true) return res.status(400).json({ error: 'You must accept the Terms of Service.' });
       const exists = await db.exists(key(name));
@@ -39,6 +46,34 @@ export default async function handler(req, res) {
     if (!acct || acct.hash !== hash) return res.status(401).json({ error: 'Wrong email or password.' });
     if (action === 'login' && String(acct.data.username || '').toLowerCase() !== username.toLowerCase())
       return res.status(401).json({ error: 'That username does not match this email.' });
+
+    if (action === 'score') {
+      const days = Math.max(0, Math.min(10000, Math.floor(Number(body.days) || 0)));
+      const who = String(acct.data.username || '');
+      const animal = String(body.animal || '').replace(/[^a-z]/g, '').slice(0, 20);
+      if (who && days > 0) {
+        await db.zAdd('lb:all', { score: days, value: who }, { GT: true });
+        if (animal) await db.zAdd('lb:animal:' + animal, { score: days, value: who }, { GT: true });
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'presence') {
+      const who = String(acct.data.username || '');
+      if (!who) return res.status(200).json({ others: [] });
+      const mine = {
+        username: who, animal: String(body.animal || '').replace(/[^a-z]/g, '').slice(0, 20),
+        x: Number(body.x) || 0, y: Number(body.y) || 0, h: Number(body.h) || 0, alt: Number(body.alt) || 0,
+      };
+      await db.set('presence:' + who, JSON.stringify(mine), { EX: 8 });
+      const others = [];
+      for (const k of (await db.keys('presence:*')).slice(0, 40)) {
+        if (k === 'presence:' + who) continue;
+        const r = await db.get(k);
+        if (r) others.push(JSON.parse(r));
+      }
+      return res.status(200).json({ others });
+    }
 
     if (action === 'admin' || action === 'admindelete') {
       const admin = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();

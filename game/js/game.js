@@ -135,6 +135,16 @@ function M(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) {
   m.position.set(x, y, z);
   m.scale.set(sx, sy, sz);
   m.castShadow = true; m.receiveShadow = true;
+  // thin vertical parts touching the ground are legs: hinge them at the top so they can swing
+  if (geo === GEO.sph && sy >= 2 * sx && sy >= 2 * sz && sy <= 1.2 && y > 0 && y - sy < 0.2) {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y + sy, z);
+    m.position.set(0, -sy, 0);
+    pivot.add(m);
+    pivot.userData.leg = true;
+    pivot.userData.ph = ((x > 0) !== (z > 0)) ? 0 : Math.PI;
+    return pivot;
+  }
   return m;
 }
 
@@ -481,7 +491,7 @@ let currentUser = null;
 let coins = 0;
 let owned = [];
 function saveEcon() { writeAccount(); }
-function addCoins(n) { coins += n; saveEcon(); }
+function addCoins(n) { coins += n; saveEcon(); if (window.Features) Features.coinsEarned(n); }
 function isUnlocked(k) {
   return (ANIMALS[k].price || 0) === 0 || owned.includes(k);
 }
@@ -496,6 +506,7 @@ function buyAnimal(key) {
   owned.push(key);
   saveEcon();
   $('menuMsg').textContent = 'Bought the ' + ANIMALS[key].name + '!';
+  if (window.Features) Features.event('buy');
   $('cards').innerHTML = '';
   buildMenu();
 }
@@ -581,9 +592,22 @@ function buildWorld() {
 }
 
 // start a new run as the given animal
+// small seeded random generator: everyone gets the same forest on the same day
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const WORLD_SEED = Math.floor(Date.now() / 86400000);
+
 function init(key) {
   animalKey = key;
   ANI = ANIMALS[key];
+  const realRandom = Math.random;
+  Math.random = mulberry32(WORLD_SEED);   // map, trees and rocks are seeded
   map = []; bush = [];
   for (let y = 0; y < ROWS; y++) {
     map.push([]); bush.push([]);
@@ -616,6 +640,7 @@ function init(key) {
   msg = ''; msgT = 0;
 
   buildWorld();
+  Math.random = realRandom;                // everything after this is truly random again
 
   if (playerMesh) scene.remove(playerMesh);
   playerMesh = ANI.build();
@@ -633,6 +658,7 @@ function init(key) {
     wolves.push({ x: s.x, y: s.y, t: 0, a: rnd(0, 6.28), cool: 0, h: 0, mesh });
   }
   say('Find food and water. Wolves come out at dusk. Sleep in the den!');
+  if (window.Features) Features.onInit();
 }
 
 function makeWolf() {
@@ -755,6 +781,7 @@ function useAbility() {
       world.remove(best.mesh);
       rabbits.splice(rabbits.indexOf(best), 1);
       P.hunger = clamp(P.hunger + 30, 0, 100);
+      if (window.Features) Features.event('rabbit');
       break;
     }
     case 'song': for (const w of wolves) if (near(w.x, w.y, 10)) w.slow = 4; break;
@@ -764,6 +791,7 @@ function useAbility() {
   }
   abilityCool = info.cd;
   say(info.text);
+  if (window.Features) Features.event('ability');
 }
 
 // wild critters: squirrels, deer and ducks (ducks live on ponds)
@@ -831,6 +859,7 @@ function tame() {
     world.add(mesh);
     pets.push({ kind, x: best.x, y: best.y, hp: PET_HP[kind], alertCool: 0, forageCool: 20, abT: 20, mesh });
     say('You tamed a ' + kind + '! It will follow and help.');
+    if (window.Features) Features.event('tame');
   } else {
     say('The ' + kind + ' ran off.');
   }
@@ -851,6 +880,7 @@ function interact() {
         P.hunger = clamp(P.hunger + 45, 0, 100);
         addCoins(1);
       say('You caught a rabbit! (+hunger, +1 coin)');
+      if (window.Features) Features.event('rabbit');
       } else {
         say('The rabbit escaped!');
       }
@@ -885,12 +915,13 @@ function update(dt) {
     if (rainCool <= 0) { rainT = 25; rainCool = rnd(60, 90); say('Rain is falling. Ponds fill faster.'); }
   }
   const d = Math.floor(time / DAY) + 1;
-  if (d !== day) { day = d; addCoins(1); say('Day ' + day + ' dawns. You survived ' + (day - 1) + ' day(s) so far.'); }
+  if (d !== day) { day = d; if (window.Features) Features.event('dawn', day); addCoins(1); say('Day ' + day + ' dawns. You survived ' + (day - 1) + ' day(s) so far.'); }
 
   const ph = (time % DAY) / DAY;
   // slow dusk (0.5 to 0.7 of the day) and slow dawn (0.85 to 1.0), so light fades gradually
   darkness = ph < 0.5 ? 0 : ph < 0.7 ? (ph - 0.5) / 0.2 : ph < 0.85 ? 1 : (1 - ph) / 0.15;
   const night = darkness > 0.5;
+  if (window.Features) Features.onUpdate(dt, night);
 
   // player: tank controls (turn with A/D, walk with W/S)
   // Left/Right arrows (or A/D) turn the animal in place; Up/Down (or W/S) walk forward/back
@@ -939,7 +970,7 @@ function update(dt) {
   for (const w of wolves) {
     w.cool -= dt;
     const dist = Math.hypot(P.x - w.x, P.y - w.y);
-    const aggro = night ? 9 : 5;
+    const aggro = w.big ? 22 : (night ? 9 : 5);
     let tx, ty, s;
     // wolves tire after a 6-second chase and rest for 3 seconds
     if (w.rest > 0) w.rest -= dt;
@@ -948,7 +979,7 @@ function update(dt) {
       w.chase = (w.chase || 0) + dt;
       if (w.chase > 6) { w.chase = 0; w.rest = 3; }
       tx = (P.x - w.x) / Ld; ty = (P.y - w.y) / Ld;
-      s = night ? 2.9 : 1.6;
+      s = w.big ? 3.3 : (night ? 2.9 : 1.6);
     } else {
       w.t -= dt;
       if (w.t <= 0) { w.t = rnd(1, 3); w.a = rnd(0, 6.28); }
@@ -957,7 +988,7 @@ function update(dt) {
     if (w.slow > 0) { w.slow -= dt; s *= 0.4; }
     move(w, tx * s * dt, ty * s * dt, 0.3, true);
     w.h = Math.atan2(tx, ty);
-    if (dist < 0.9 && w.cool <= 0 && !den && P.alt < 0.8 && !(P.shield > 0)) {
+    if (dist < (w.big ? 1.4 : 0.9) && w.cool <= 0 && !den && P.alt < 0.8 && !(P.shield > 0)) {
       w.cool = 1.8;
       const guard = pets.find(p => Math.hypot(p.x - P.x, p.y - P.y) < 2);
       if (guard) {
@@ -970,7 +1001,7 @@ function update(dt) {
           say('Your ' + guard.kind + ' ran off hurt and is gone.');
         }
       } else {
-        P.hp -= (night ? 12 : 8) * ANI.dmg;
+        P.hp -= (w.big ? 20 : (night ? 12 : 8)) * ANI.dmg;
         say('A wolf bit you!');
         flashA = 0.4; shake = 0.5; beep(120, 0.2);
       }
@@ -1091,6 +1122,7 @@ function update(dt) {
     const got = day - 1;
     if (got > (bestDays[animalKey] || 0)) bestDays[animalKey] = got;
     saveBest();
+    if (window.Features) Features.onDeath(got);
   }
 }
 
@@ -1173,6 +1205,7 @@ function render(dt) {
     (inDen() ? 'Resting in den (safe)' : 'Den: ' + dd + ' tiles away');
   if (pets.length) $('info').textContent += ' · Pets ' + pets.length + '/' + MAX_PETS;
   $('info').textContent += ' · Coins ' + coins;
+  if (window.Features) Features.onRender(dt);
   const m = $('msg');
   m.textContent = msg;
   m.style.display = (msgT > 0 && msg && !over && !paused) ? 'block' : 'none';
@@ -1210,6 +1243,7 @@ function showMenu() {
   buildMenu();
   $('over').style.display = 'none';
   $('menu').style.display = 'flex';
+  if (window.Features) Features.onMenu();
 }
 function startGame(key) {
   if (!currentUser) return;
@@ -1262,13 +1296,13 @@ scene.add(rainMesh);
 let currentHash = null;
 let currentUsername = '';
 let currentTerms = '';
-const TERMS_VERSION = '2026-11-20';
+const TERMS_VERSION = '2026-11-21';
 function writeAccount() {
   if (!currentUser) return;
   fetch('/api/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: currentUser, hash: currentHash, data: { coins, owned, bestDays, username: currentUsername, terms: currentTerms } }),
+    body: JSON.stringify({ name: currentUser, hash: currentHash, data: { coins, owned, bestDays, username: currentUsername, terms: currentTerms, ...(window.Features ? Features.saveData() : {}) } }),
   }).catch(() => {});
 }
 async function postApi(path, body) {
@@ -1303,6 +1337,7 @@ function loginAs(name, hash, data) {
   data = data || {};
   currentUsername = data.username || '';
   currentTerms = data.terms || '';
+  if (window.Features) Features.load(data);
   coins = data.coins || 0;
   owned = data.owned || [];
   bestDays = data.bestDays || {};
@@ -1335,7 +1370,8 @@ async function logIn() {
 }
 function logOut() {
   writeAccount();
-  currentUser = null; currentHash = null; currentUsername = ''; currentTerms = ''; coins = 0; owned = []; bestDays = {};
+  currentUser = null; currentHash = null; currentUsername = ''; currentTerms = '';
+  if (window.Features) Features.load({}); coins = 0; owned = []; bestDays = {};
   paused = true; over = false;
   $('menu').style.display = 'none';
   $('login').style.display = 'flex';

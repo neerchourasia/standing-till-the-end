@@ -19,3 +19,17 @@
   .card b { font-size:18px; }
   .card small { display:block; margin-top:6px; opacity:.8; line-height:1.35; }
   #menu p { opacity:.7; margin-top:24px; }
+
+  #minimap { position:fixed; left:12px; bottom:12px; border:2px solid rgba(255,255,255,.55); border-radius:6px; background:#000; z-index:2; }
+  #menuExtras { max-width:900px; text-align:center; margin-bottom:12px; }
+  #menuExtras .extra-line { margin:4px 0; font-size:14px; }
+  #menuExtras .small { font-size:12px; opacity:.8; }
+  #menuExtras button { font-size:13px; padding:4px 10px; margin-top:6px; }
+  #lbBox { font-size:14px; margin-top:6px; line-height:1.5; }
+  #touch { display:none; position:fixed; left:0; right:0; bottom:0; z-index:3; justify-content:space-between; align-items:flex-end; padding:12px 12px 20px; pointer-events:none; }
+  #touch button { pointer-events:auto; width:56px; height:56px; margin:4px; border-radius:50%; border:2px solid rgba(255,255,255,.6); background:rgba(0,0,0,.45); color:#fff; font-size:20px; touch-action:none; user-select:none; }
+  #touch .pad { display:grid; grid-template-columns:repeat(3,64px); grid-template-areas:". up ." "left . right" ". down ."; }
+  #touch .pad button:nth-child(1) { grid-area:up; } #touch .pad button:nth-child(2) { grid-area:left; }
+  #touch .pad button:nth-child(3) { grid-area:right; } #touch .pad button:nth-child(4) { grid-area:down; }
+  #touch .acts { display:grid; grid-template-columns:repeat(2,64px); }
+  @media (pointer: coarse) { #touch { display:flex; } #minimap { left:auto; right:12px; top:12px; bottom:auto; } #help { display:none; } }
