@@ -104,6 +104,7 @@ const MAT = {
   water: new THREE.MeshPhongMaterial({ color: 0x2a6fb8, shininess: 80 }),
   bush: L(0x2e6b2e), berry: L(0xe0304a), denG: L(0x3a2e22), denHole: L(0x140e08),
   fox: L(0xe8731c), white: L(0xffffff), dark: L(0x222222),
+  Ner: L(0xe8789c), white: L(0xffffff), dark: L(0x000000),
   rabbit: L(0xc9c3b8), wolf: L(0x4a4f57), wolfDark: L(0x333740),
   bear: L(0x5a3b22), bearDark: L(0x3b2615),
   deer: L(0xb08050), deerDark: L(0x5a3a22), antler: L(0x6b5a40),
