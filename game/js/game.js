@@ -481,7 +481,7 @@ Object.assign(ANIMALS, {
   raccoon:  { name: 'Raccoon',  desc: 'Clever forager. Eats anything. Takes 90% damage.', speed: 1.0, dmg: 0.9, hunger: 1.0, thirst: 1.0, diet: 'omni', scale: 1.0, cam: 6, build: makeRaccoon },
   moose:    { name: 'Moose',    desc: 'Huge and calm. Takes 40% damage. Grazes only.', speed: 0.9, dmg: 0.4, hunger: 1.8, thirst: 1.2, diet: 'herb', scale: 1.8, cam: 12, build: makeMoose },
   lynx:     { name: 'Lynx',     desc: 'Stealthy and fast. Hunts rabbits only.', speed: 1.45, dmg: 0.9, hunger: 1.1, thirst: 1.0, diet: 'carn', scale: 1.1, cam: 7, build: makeLynx },
-  cell: { name: 'Cell', desc: 'A giant black-and-white cell, zoomed in a lot. Slow and squishy, takes 50% damage. Can divide to heal.', speed: 0.7, dmg: 0.5, hunger: 0.5, thirst: 0.5, diet: 'herb', scale: 2.5, cam: 15, build: makeCell },
+  cell: { name: 'Cell', desc: 'A tiny black-and-white cell. The camera zooms right in. Slow and squishy, takes 50% damage. Can divide to heal.', speed: 0.7, dmg: 0.5, hunger: 0.5, thirst: 0.5, diet: 'herb', scale: 0.4, cam: 2.6, camH: 1.3, build: makeCell },
 });
 
 // ---------- unlocks, best-days records, abilities ----------
@@ -1188,7 +1188,7 @@ function render(dt) {
 
   // third-person camera behind the animal, distance and height scale with its size
   const cd = ANI.cam;
-  const want = new THREE.Vector3(P.x * S - Math.sin(P.h) * cd, 3 + ANI.scale * 1.2 + P.alt * 0.6, P.y * S - Math.cos(P.h) * cd);
+  const want = new THREE.Vector3(P.x * S - Math.sin(P.h) * cd, (ANI.camH !== undefined ? ANI.camH : 3 + ANI.scale * 1.2) + P.alt * 0.6, P.y * S - Math.cos(P.h) * cd);
   camera.position.lerp(want, 1 - Math.exp(-dt * 6));
   camera.lookAt(P.x * S, 1.2 * ANI.scale, P.y * S);
   if (shake > 0) {
