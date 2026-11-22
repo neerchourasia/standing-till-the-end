@@ -105,6 +105,7 @@ const MAT = {
   bush: L(0x2e6b2e), berry: L(0xe0304a), denG: L(0x3a2e22), denHole: L(0x140e08),
   fox: L(0xe8731c), white: L(0xffffff), dark: L(0x222222),
   Ner: L(0xe8789c), white: L(0xffffff), dark: L(0x000000),
+  cellWhite: L(0xf5f5f5), cellBlack: L(0x0b0b0b), cellGrey: L(0x8a8a8a),
   rabbit: L(0xc9c3b8), wolf: L(0x4a4f57), wolfDark: L(0x333740),
   bear: L(0x5a3b22), bearDark: L(0x3b2615),
   deer: L(0xb08050), deerDark: L(0x5a3a22), antler: L(0x6b5a40),
@@ -441,6 +442,19 @@ function makeLynx() {
   return g;
 }
 
+function makeCell() {
+  const g = new THREE.Group();
+  g.add(M(GEO.sph, MAT.cellWhite, 0, 1.3, 0, 1.3, 1.3, 1.3));            // body
+  g.add(M(GEO.sph, MAT.cellBlack, 0.2, 1.4, 0.35, 0.6, 0.6, 0.6));       // nucleus
+  g.add(M(GEO.sph, MAT.cellWhite, 0.3, 1.5, 0.62, 0.22, 0.22, 0.22));    // nucleolus
+  for (let i = 0; i < 12; i++) {                                          // organelles around the surface
+    const yy = (i / 11) * 2 - 1, rr = Math.sqrt(1 - yy * yy), a = i * 2.4;
+    const r = 1.22, size = 0.14 + (i % 3) * 0.05;
+    g.add(M(GEO.sph, i % 2 ? MAT.cellGrey : MAT.cellBlack, Math.cos(a) * rr * r, 1.3 + yy * r, Math.sin(a) * rr * r, size, size, size));
+  }
+  return g;
+}
+
 // ---------- animal definitions ----------
 const ANIMALS = {
   fox:    { name: 'Fox',    desc: 'Balanced all-rounder. Hunts rabbits.', speed: 1.0, dmg: 1.0, hunger: 0.9, thirst: 1.2, diet: 'omni', scale: 1.0, cam: 7, build: makeFox },
@@ -467,6 +481,7 @@ Object.assign(ANIMALS, {
   raccoon:  { name: 'Raccoon',  desc: 'Clever forager. Eats anything. Takes 90% damage.', speed: 1.0, dmg: 0.9, hunger: 1.0, thirst: 1.0, diet: 'omni', scale: 1.0, cam: 6, build: makeRaccoon },
   moose:    { name: 'Moose',    desc: 'Huge and calm. Takes 40% damage. Grazes only.', speed: 0.9, dmg: 0.4, hunger: 1.8, thirst: 1.2, diet: 'herb', scale: 1.8, cam: 12, build: makeMoose },
   lynx:     { name: 'Lynx',     desc: 'Stealthy and fast. Hunts rabbits only.', speed: 1.45, dmg: 0.9, hunger: 1.1, thirst: 1.0, diet: 'carn', scale: 1.1, cam: 7, build: makeLynx },
+  cell: { name: 'Cell', desc: 'A giant black-and-white cell, zoomed in a lot. Slow and squishy, takes 50% damage. Can divide to heal.', speed: 0.7, dmg: 0.5, hunger: 0.5, thirst: 0.5, diet: 'herb', scale: 2.5, cam: 15, build: makeCell },
 });
 
 // ---------- unlocks, best-days records, abilities ----------
@@ -476,9 +491,9 @@ const ABILITY_BY_ANIMAL = {
   badger: 'heal', squirrel: 'stash', boar: 'charge', hawk: 'soar', owl: 'hoot',
   duck: 'dive', crow: 'pilfer', eagle: 'stoop', sparrow: 'song', heron: 'fish',
   pigeon: 'homing', falcon: 'rush', secretary: 'snack', hedgehog: 'curl',
-  raccoon: 'rummage', moose: 'bellow', lynx: 'stomp',
+  raccoon: 'rummage', moose: 'bellow', lynx: 'stomp', cell: 'divide',
 };
-const PRICE = { bear: 10, badger: 10, wolf: 15, boar: 12, hawk: 15, crow: 12, owl: 18, heron: 20, eagle: 25, falcon: 25, secretary: 30, hedgehog: 8, raccoon: 12, moose: 20, lynx: 22 };
+const PRICE = { bear: 10, badger: 10, wolf: 15, boar: 12, hawk: 15, crow: 12, owl: 18, heron: 20, eagle: 25, falcon: 25, secretary: 30, hedgehog: 8, raccoon: 12, moose: 20, lynx: 22, cell: 80 };
 for (const k in ANIMALS) {
   ANIMALS[k].price = PRICE[k] || 0;
   ANIMALS[k].ability = ABILITY_BY_ANIMAL[k] || 'dash';   // Shift: each animal has its own
@@ -626,7 +641,7 @@ function init(key) {
   }
   const sx = Math.floor(COLS / 2), sy = Math.floor(ROWS / 2);
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++)
-    if (Math.hypot(x - sx, y - sy) < 6 && solidT(map[y][x])) map[y][x] = T_GRASS;
+    if (Math.hypot(x - sx, y - sy) < 6 && (solidT(map[y][x]) || map[y][x] === T_TREE)) map[y][x] = T_GRASS; // clear trees around the start
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++)
     if (Math.hypot(x - (sx - 7), y - sy) < 2.5) map[y][x] = T_WATER;
   denX = sx + 3; denY = sy + 3;
@@ -739,6 +754,7 @@ const ABILITY_INFO = {
   curl: { cd: 14, text: 'Curled up. Bites do nothing for 3s.' },
   rummage: { cd: 12, text: 'Rummaged. +1 coin, +10 hunger.' },
   bellow: { cd: 16, text: 'Bellow! Wolves back off, +10 health.' },
+  divide: { cd: 20, text: 'The cell divides! +30 health and a shield for 3s.' },
 };
 function useAbility() {
   if (over || paused) return;
@@ -788,6 +804,7 @@ function useAbility() {
     case 'song': for (const w of wolves) if (near(w.x, w.y, 10)) w.slow = 4; break;
     case 'homing': for (const p of pets) { p.x = P.x; p.y = P.y; } break;
     case 'curl': P.shield = 3; break;
+    case 'divide': P.hp = Math.min(100, P.hp + 30); P.shield = 3; break;
     default: return;
   }
   abilityCool = info.cd;
@@ -1255,7 +1272,7 @@ function startGame(key) {
 }
 
 // ---------- input ----------
-const MENU_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'KeyZ', 'KeyX', 'KeyQ', 'KeyF', 'KeyC', 'KeyV', 'KeyG', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO'];
+const MENU_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'KeyZ', 'KeyX', 'KeyQ', 'KeyF', 'KeyC', 'KeyV', 'KeyG', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyB'];
 addEventListener('keydown', e => {
   if (!currentUser) return; // nothing works until someone is signed in
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
